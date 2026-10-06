@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Молочный комбинат «Полесье»</title>
+    <style>
+      body {
+        font: 16px Arial;
+        margin: 0;
+        background: #f3f5f7;
+        color: #222;
+      }
+      header {
+        background: #334155;
+        color: white;
+        padding: 14px 20px;
+        display: flex;
+        justify-content: space-between;
+      }
+      .box {
+        max-width: 900px;
+        margin: 25px auto;
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+      }
+      input,
+      select,
+      button {
+        padding: 9px;
+        margin: 5px 0;
+        font-size: 15px;
+      }
+      button {
+        cursor: pointer;
+      }
+      .hide {
+        display: none;
+      }
+      .tabs button {
+        margin-right: 6px;
+      }
+      .card {
+        border: 1px solid #ddd;
+        padding: 12px;
+        margin-top: 10px;
+        border-radius: 8px;
+      }
+      .puzzle {
+        display: grid;
+        grid-template-columns: 180px 180px;
+        gap: 4px;
+        width: 364px;
+        margin: 10px 0;
+      }
+      .piece {
+        width: 180px;
+        height: 180px;
+        box-sizing: border-box;
+        border: 2px solid #64748b;
+        background: #fff;
+        cursor: pointer;
+        padding: 0;
+      }
+      .piece img {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .sel {
+        outline: 4px solid #f59e0b;
+        outline-offset: -4px;
+      }
+      .ok {
+        color: green;
+      }
+      .bad {
+        color: #b91c1c;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-top: 10px;
+      }
+      td,
+      th {
+        border: 1px solid #ddd;
+        padding: 7px;
+      }
+      .small {
+        color: #666;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <b>ООО Молочный комбинат «Полесье»</b><span id="who"></span>
+    </header>
+    <div class="box" id="loginBox">
+      <h2>Авторизация</h2>
+      <input id="login" placeholder="Логин" /><br /><input
+        id="pass"
+        type="password"
+        placeholder="Пароль"
+      /><br />
+      <div>
+        Соберите исходное изображение из 4 фрагментов. Нажмите на два фрагмента,
+        чтобы поменять их местами:
+      </div>
+      <div class="puzzle" id="puzzle"></div>
+      <button onclick="login()">Войти</button>
+      <div id="msg"></div>
+      <div class="small">admin/admin123 или user/user123</div>
+    </div>
+    <div class="box hide" id="appBox">
+      <div class="tabs">
+        <button onclick="show('home')">Главная</button
+        ><button onclick="show('customers')">Клиенты</button
+        ><button onclick="show('api')">API</button
+        ><button onclick="show('validate')">Валидация</button
+        ><button onclick="show('sql')">SQL</button
+        ><button id="adminTab" class="hide" onclick="show('admin')">
+          Админка</button
+        ><button onclick="logout()">Выйти</button>
+      </div>
+      <div id="home">
+        <h2>Рабочий стол</h2>
+        <p>Базовая учебная версия информационной системы.</p>
+        <p>Роль: <b id="role"></b></p>
+      </div>
+      <div id="customers" class="hide">
+        <h2>Клиенты</h2>
+        <button onclick="loadCustomers()">Показать</button>
+        <button onclick="importJSON()">Импорт JSON</button>
+        <div id="custOut"></div>
+      </div>
+      <div id="api" class="hide">
+        <h2>Работа с API</h2>
+        <select id="endpoint">
+          <option>fullName</option>
+          <option>snils</option>
+          <option>inn</option>
+          <option>email</option>
+          <option>identityCard</option></select
+        ><button onclick="getAPI()">Получить данные</button>
+        <div id="apiOut"></div>
+      </div>
+      <div id="validate" class="hide">
+        <h2>Проверка ФИО</h2>
+        <input id="fio" placeholder="Иванов Иван Иванович" /><button
+          onclick="validate()"
+        >
+          Проверить
+        </button>
+        <div id="valOut"></div>
+      </div>
+      <div id="sql" class="hide">
+        <h2>SQL-запрос</h2>
+        <button onclick="runSQL()">Рассчитать стоимость заказа</button>
+        <div id="sqlOut"></div>
+      </div>
+      <div id="admin" class="hide">
+        <h2>Пользователи</h2>
+        <input id="newLogin" placeholder="Логин" /><input
+          id="newPass"
+          placeholder="Пароль"
+        /><select id="newRole">
+          <option value="user">Пользователь</option>
+          <option value="admin">Администратор</option></select
+        ><button onclick="addUser()">Добавить</button>
+        <div id="usersOut"></div>
+      </div>
+    </div>
+    <script>
+      const { ipcRenderer } = require("electron");
+      let order = [],
+        selected = null;
+      function makePuzzle() {
+        order = [2, 0, 3, 1];
+        selected = null;
+        drawPuzzle();
+      }
+      function drawPuzzle() {
+        puzzle.innerHTML = "";
+        order.forEach((n, i) => {
+          let d = document.createElement("div");
+          d.className = "piece" + (selected === i ? " sel" : "");
+          let img = document.createElement("img");
+          img.src = "captcha/" + (n + 1) + ".png";
+          img.draggable = false;
+          d.appendChild(img);
+          d.onclick = () => {
+            if (selected === null) selected = i;
+            else {
+              [order[selected], order[i]] = [order[i], order[selected]];
+              selected = null;
+            }
+            drawPuzzle();
+          };
+          puzzle.appendChild(d);
+        });
+      }
+      makePuzzle();
+      async function login() {
+        let r = await ipcRenderer.invoke("login", {
+          login: loginEl(),
+          password: pass.value,
+          order,
+        });
+        msg.innerText = r.msg;
+        msg.className = r.ok ? "ok" : "bad";
+        if (r.ok) {
+          loginBox.classList.add("hide");
+          appBox.classList.remove("hide");
+          who.innerText = r.user.login;
+          role.innerText =
+            r.user.role === "admin" ? "Администратор" : "Пользователь";
+          adminTab.classList.toggle("hide", r.user.role !== "admin");
+        } else if (r.msg.includes("заблок")) makePuzzle();
+      }
+      function loginEl() {
+        return document.getElementById("login").value;
+      }
+      async function logout() {
+        await ipcRenderer.invoke("logout");
+        location.reload();
+      }
+      function show(id) {
+        ["home", "customers", "api", "validate", "sql", "admin"].forEach((x) =>
+          document.getElementById(x).classList.toggle("hide", x !== id),
+        );
+        if (id === "admin") loadUsers();
+      }
+      async function loadCustomers() {
+        let a = await ipcRenderer.invoke("customers");
+        custOut.innerHTML =
+          "<table><tr><th>Название</th><th>ИНН</th></tr>" +
+          a
+            .map((x) => `<tr><td>${x.name}</td><td>${x.inn}</td></tr>`)
+            .join("") +
+          "</table>";
+      }
+      async function importJSON() {
+        try {
+          let n = await ipcRenderer.invoke("importJSON");
+          alert("Импортировано: " + n);
+        } catch (e) {
+          alert(e.message);
+        }
+      }
+      async function getAPI() {
+        try {
+          let x = await ipcRenderer.invoke("api", endpoint.value);
+          apiOut.innerHTML = "<pre>" + JSON.stringify(x, null, 2) + "</pre>";
+        } catch (e) {
+          apiOut.innerText = e.message;
+        }
+      }
+      function validate() {
+        let s = fio.value.trim().replace(/\s+/g, " "),
+          a = !/[^А-Яа-яЁё\s-]/.test(s),
+          b = s.split(" ").length === 3;
+        valOut.innerHTML = `Запрещенные символы: ${a ? "нет" : "есть"}<br>Три компонента ФИО: ${b ? "да" : "нет"}<br><b>${a && b ? "Успешно" : "Не успешно"}</b>`;
+      }
+      async function runSQL() {
+        let a = await ipcRenderer.invoke("sql");
+        sqlOut.innerHTML =
+          "<table><tr><th>Клиент</th><th>Продукт</th><th>Кол-во</th><th>Стоимость материалов</th></tr>" +
+          a
+            .map(
+              (x) =>
+                `<tr><td>${x.customer}</td><td>${x.product}</td><td>${x.qty}</td><td>${x.material_cost}</td></tr>`,
+            )
+            .join("") +
+          "</table>";
+      }
+      async function loadUsers() {
+        let a = await ipcRenderer.invoke("users");
+        usersOut.innerHTML =
+          "<table><tr><th>Логин</th><th>Роль</th><th>Блок</th><th></th></tr>" +
+          a
+            .map(
+              (x) =>
+                `<tr><td>${x.login}</td><td>${x.role}</td><td>${x.blocked ? "да" : "нет"}</td><td><button onclick="editUser(${x.id})">Изменить</button> <button onclick="unlockUser(${x.id})">Разблокировать</button> <button onclick="delUser(${x.id})">Удалить</button></td></tr>`,
+            )
+            .join("") +
+          "</table>";
+      }
+      async function addUser() {
+        try {
+          await ipcRenderer.invoke("addUser", {
+            login: newLogin.value,
+            password: newPass.value,
+            role: newRole.value,
+          });
+          newLogin.value = "";
+          newPass.value = "";
+          loadUsers();
+        } catch (e) {
+          alert(e.message);
+        }
+      }
+      async function editUser(id) {
+        let a = await ipcRenderer.invoke("users"),
+          x = a.find((v) => v.id === id);
+        let l = prompt("Логин", x.login);
+        if (l === null) return;
+        let r = prompt("Роль: admin или user", x.role);
+        if (r !== "admin" && r !== "user") return alert("Роль: admin или user");
+        let p = prompt("Новый пароль", x.password || "");
+        if (p === null) return;
+        await ipcRenderer.invoke("editUser", {
+          id,
+          login: l,
+          password: p,
+          role: r,
+        });
+        loadUsers();
+      }
+      async function unlockUser(id) {
+        await ipcRenderer.invoke("editUser", { id, unlock: true });
+        loadUsers();
+      }
+      async function delUser(id) {
+        try {
+          await ipcRenderer.invoke("deleteUser", id);
+          loadUsers();
+        } catch (e) {
+          alert(e.message);
+        }
+      }
+    </script>
+  </body>
+</html>
